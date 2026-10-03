@@ -1,0 +1,18 @@
+# Local credentials and environment configuration
+.env
+.env.*
+!.env.example
+kaggle.json
+
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Jupyter-generated state
+.ipynb_checkpoints/
+
+# Locally trained artifacts are not reviewed app releases
+model_trained.pkl
