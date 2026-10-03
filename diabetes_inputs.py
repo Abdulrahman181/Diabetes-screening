@@ -39,3 +39,16 @@ def make_input_frame(raw_values: Mapping[str, object]) -> pd.DataFrame:
         [[converted[feature] for feature in FEATURES]],
         columns=FEATURES,
     )
+
+
+def validate_model_schema(model: object) -> object:
+    """Reject an artifact that cannot accept this app's ordered feature schema."""
+    feature_count = getattr(model, "n_features_in_", None)
+    if feature_count != len(FEATURES):
+        raise ValueError("The model feature count does not match the app schema.")
+
+    feature_names = getattr(model, "feature_names_in_", None)
+    if feature_names is not None and tuple(feature_names) != FEATURES:
+        raise ValueError("The model feature order does not match the app schema.")
+
+    return model

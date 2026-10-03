@@ -19,8 +19,15 @@ The app reads `model.pkl` relative to `diabetes.py`; it no longer relies on a ma
 ## Model and reproducibility limitations
 
 - `diabetes.csv` is not present. The notebook's training and analysis cells cannot be reproduced until the appropriate dataset is supplied locally; this repository does not provide or claim permission to redistribute it.
-- The checked-in model is a Python pickle. Pickle deserialization can execute code, so load it only from a source you trust. Pickled scikit-learn models are version-sensitive; the dependency pin follows the artifact's recorded scikit-learn version, but runtime loading and predictions were not validated in this environment.
+- To run the notebook, start Jupyter from the repository root and place an authorized `diabetes.csv` there, or edit the notebook's `DATA_PATH` to the local authorized copy. The notebook checks for the required columns and finite numeric values before analysis.
+- The notebook splits data into training, validation, and held-out test sets before fitting a sampler. Random oversampling occurs only inside an imbalanced-learn pipeline fitted on training data; validation is used for candidate selection, and the test set is reserved for a single final evaluation. These code paths have not been run here because the dataset is absent.
+- Running the notebook writes a separate `model_trained.pkl` in the current working directory; it does not overwrite the checked-in `model.pkl` used by the app. Review any locally generated artifact and its provenance before replacing the app artifact.
+- The checked-in model is a Python pickle. Pickle deserialization can execute code, so load it only from a source you trust. The app checks the artifact's feature count and, when available, exact feature names/order before inference. Pickled scikit-learn models are version-sensitive; the dependency pin follows the artifact's recorded scikit-learn version, but runtime loading and predictions were not validated in this environment.
 - Notebook outputs have been cleared to avoid presenting stale results as validated metrics. No model-performance claim is made.
+
+## Automated checks
+
+GitHub Actions installs the pinned dependencies under Python 3.9, runs unit and notebook-structure tests, checks Python syntax, and verifies dependency consistency. These checks do not load or evaluate `model.pkl` and do not constitute clinical or external validation.
 
 ## Credentials
 

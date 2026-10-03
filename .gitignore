@@ -13,3 +13,6 @@ __pycache__/
 
 # Jupyter-generated state
 .ipynb_checkpoints/
+
+# Locally trained artifacts are not reviewed app releases
+model_trained.pkl

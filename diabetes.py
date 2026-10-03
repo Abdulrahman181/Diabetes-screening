@@ -5,7 +5,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from diabetes_inputs import FEATURES, make_input_frame
+from diabetes_inputs import FEATURES, make_input_frame, validate_model_schema
 
 MODEL_PATH = Path(__file__).resolve().parent / "model.pkl"
 
@@ -14,7 +14,8 @@ MODEL_PATH = Path(__file__).resolve().parent / "model.pkl"
 def load_model():
     """Load the trusted repository artifact once per Streamlit process."""
     with MODEL_PATH.open("rb") as model_file:
-        return pickle.load(model_file)
+        model = pickle.load(model_file)
+    return validate_model_schema(model)
 
 
 st.title("Diabetes screening model demo")
@@ -43,7 +44,10 @@ if submitted:
     else:
         try:
             model = load_model()
-            prediction = int(model.predict(input_frame)[0])
+            predictions = model.predict(input_frame)
+            if len(predictions) != 1:
+                raise ValueError("The model returned an unexpected number of predictions.")
+            prediction = predictions[0]
         except Exception:
             # Avoid displaying user inputs, model internals, or local paths.
             st.error(
