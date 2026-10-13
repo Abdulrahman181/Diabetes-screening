@@ -1,36 +1,93 @@
+"""Streamlit UI for the diabetes classifier artifact.
+
+The model path is configurable with ``DIABETES_MODEL_PATH`` and defaults to
+``model.pkl`` next to this file.  The application intentionally does not train
+or evaluate a model at request time.
+"""
+
+from __future__ import annotations
+
+import os
 import pickle
-import streamlit as st
+from pathlib import Path
+from typing import Any
+
 import pandas as pd
-Data=pickle.load(open(r'C:\Users\TREIKA\Desktop\diabetis deployment\model.pkl','rb'))
- 
-st.title('Diabetes Prediction Web App')
-st.info('Easy Application for Diabetes Prediction')
-st.sidebar.header('Feature Selection')
+import streamlit as st
+
+FEATURES = (
+    "Pregnancies",
+    "Glucose",
+    "BloodPressure",
+    "SkinThickness",
+    "Insulin",
+    "BMI",
+    "DiabetesPedigreeFunction",
+    "Age",
+)
 
 
-Pregnancies=st.text_input('Pregnancies')
-Glucose=st.text_input('Glucose')
-BloodPressure=st.text_input('BloodPressure')
-SkinThickness=st.text_input('SkinThickness')
-Insulin=st.text_input('Insulin')
-BMI=st.text_input('BMI')
-DiabetesPedigreeFunction=st.text_input('DiabetesPedigreeFunction')
-Age=st.text_input('Age')
+def model_path() -> Path:
+    """Return the configured model path, resolved relative to this file by default."""
+    configured = os.getenv("DIABETES_MODEL_PATH")
+    return Path(configured).expanduser() if configured else Path(__file__).resolve().with_name("model.pkl")
 
-df=pd.DataFrame({
-'Pregnancies':[Pregnancies],
-'Glucose':[Glucose],
-'BloodPressure':[BloodPressure],
-'SkinThickness' :[SkinThickness],
-'Insulin' :[Insulin],
-'BMI' :[BMI],
-'DiabetesPedigreeFunction' :[DiabetesPedigreeFunction],
-'Age' :[Age]
-},index=[0])
-sub=st.sidebar.button('confirm')
-if sub :
- result= Data.predict(df)
- if result==0:
-  st.sidebar.write('the patient is Not diabetic')
- else:
-  st.sidebar.write('the patient isdiabetes.py diabetic')
+
+@st.cache_resource(show_spinner=False)
+def load_model(path: str) -> Any:
+    """Load and minimally validate a trusted, local pickle model artifact."""
+    artifact = Path(path)
+    if not artifact.is_file():
+        raise FileNotFoundError(
+            f"Model artifact not found at {artifact}. "
+            "Set DIABETES_MODEL_PATH or place model.pkl beside diabetes.py."
+        )
+    with artifact.open("rb") as handle:
+        model = pickle.load(handle)
+    if not callable(getattr(model, "predict", None)):
+        raise TypeError("The model artifact does not expose a callable predict method.")
+    return model
+
+
+def input_features() -> pd.DataFrame:
+    """Collect one row of numeric features in the exact training-column order."""
+    values = {
+        "Pregnancies": st.number_input("Pregnancies", min_value=0.0, value=1.0, step=1.0),
+        "Glucose": st.number_input("Glucose", min_value=0.0, value=120.0, step=1.0),
+        "BloodPressure": st.number_input("BloodPressure", min_value=0.0, value=70.0, step=1.0),
+        "SkinThickness": st.number_input("SkinThickness", min_value=0.0, value=20.0, step=1.0),
+        "Insulin": st.number_input("Insulin", min_value=0.0, value=80.0, step=1.0),
+        "BMI": st.number_input("BMI", min_value=0.0, value=30.0, step=0.1),
+        "DiabetesPedigreeFunction": st.number_input(
+            "DiabetesPedigreeFunction", min_value=0.0, value=0.5, step=0.001, format="%.3f"
+        ),
+        "Age": st.number_input("Age", min_value=0.0, value=30.0, step=1.0),
+    }
+    return pd.DataFrame([[values[name] for name in FEATURES]], columns=FEATURES)
+
+
+def main() -> None:
+    """Render the prediction page."""
+    st.set_page_config(page_title="Diabetes Prediction", page_icon="🩺")
+    st.title("Diabetes Prediction Web App")
+    st.info("Enter clinical measurements to obtain a model prediction. This is not a diagnosis.")
+
+    try:
+        model = load_model(str(model_path()))
+    except (FileNotFoundError, OSError, TypeError, pickle.UnpicklingError) as exc:
+        st.error(str(exc))
+        st.stop()
+
+    features = input_features()
+    if st.button("Predict", type="primary"):
+        try:
+            prediction = int(model.predict(features)[0])
+        except (IndexError, TypeError, ValueError) as exc:
+            st.error(f"Prediction failed; verify model compatibility with the {len(FEATURES)} features: {exc}")
+            st.stop()
+        label = "positive (model predicts diabetes)" if prediction == 1 else "negative (model predicts no diabetes)"
+        st.success(f"Prediction: {label}")
+
+
+if __name__ == "__main__":
+    main()
