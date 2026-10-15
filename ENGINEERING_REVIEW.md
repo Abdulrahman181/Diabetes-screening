@@ -36,6 +36,7 @@ The app now uses a path relative to `diabetes.py` by default or `DIABETES_MODEL_
 ## Files changed
 
 - `diabetes.py` — portable, typed Streamlit inference entry point with model/error handling.
+- `diabetes_contracts.py` — dependency-light shared feature, path, model, and prediction contracts.
 - `diabetes.ipynb` — clean reproducible training/evaluation template with outputs removed.
 - `README.md` — setup, data/model configuration, limitations, and validation instructions.
 - `requirements.txt` — runtime and review dependencies with bounded major versions.
@@ -60,3 +61,44 @@ A full `pytest` run and model inference/training run were **not claimed**: pytes
 ## Local delivery
 
 Changes are committed locally with no remote push. The final local commit SHA is recorded by the task result and can also be obtained with `git rev-parse HEAD`.
+
+## Second Senior Review
+
+### Scope and findings
+
+This follow-up inspected every tracked file, the full notebook JSON/code state,
+the existing Git history and clean diff, the checked-in pickle metadata, and the
+Python/config/test/documentation contracts. The repository was clean at the
+start of this review. The following residual defects were found:
+
+| Priority | Finding | Disposition |
+|---|---|---|
+| Critical | `model.pkl` embeds scikit-learn `1.0.2` tree state and raises a tree-node dtype `ValueError` under the installed 1.5.1 runtime; the app did not catch this error. | Fixed the UI error boundary and documented that the artifact must be retrained/exported with a compatible dependency set. The binary was not rewritten without source data. |
+| High | The notebook's final cells contained literal `\\n` text rather than real newlines, and the metrics dictionary closed with `]`; JSON validity did not imply executable Python. | Repaired both cells and added AST parsing for every notebook code cell to the tests. |
+| High | The app only checked for a callable `predict()` and coerced any non-`1` result to negative, allowing feature-contract drift and malformed outputs to pass silently. | Added shared model feature-count/name validation, exact one-row input validation, and strict binary prediction validation. |
+| Medium | Notebook input validation allowed non-numeric feature values, non-binary labels, duplicate headers, and non-finite values to fail later or produce ambiguous training behavior. | Added explicit schema, numeric, finite-value, binary-target, minimum-size, and duplicate-header checks while preserving missing values for training imputation. |
+| Medium | Duplicate feature vectors with conflicting labels could be split across train/test, and identical feature vectors were only deduplicated when the target also matched. | Reject conflicting feature/label duplicates and deduplicate by feature vector before the split. |
+| Medium | Model paths supplied relatively could depend on Streamlit's process working directory. | Centralized path resolution relative to the application directory and covered it with tests. |
+
+### Second-review validation
+
+- `python3 -m pytest -q` — **6 passed**.
+- `ruff check diabetes.py diabetes_contracts.py tests` — **passed**.
+- `python3 -m compileall -q diabetes.py diabetes_contracts.py tests` — **passed**.
+- `python3 -m json.tool diabetes.ipynb` — **passed**.
+- AST parsing of every Python source and every notebook code cell — **passed**.
+- Notebook state check: all code-cell outputs empty and execution counts unset — **passed**.
+- `git diff --check` — **passed**.
+- The checked-in model was inspected without rewriting it; loading under the
+  available scikit-learn 1.5.1 failed with the known legacy tree dtype error.
+
+### Remaining risks and explicit non-claims
+
+- The source CSV is still absent, so no retraining, conversion, held-out
+  evaluation, or clinical performance claim is possible.
+- The checked-in pickle remains a trusted-code-execution risk and a legacy
+  scikit-learn compatibility risk. The app now fails clearly rather than
+  silently using an incompatible model, but the artifact itself still needs a
+  supervised rebuild/export.
+- Streamlit was not installed in the sandbox, so no browser/UI smoke test was
+  claimed. Dependency-free contracts and all static checks were exercised.

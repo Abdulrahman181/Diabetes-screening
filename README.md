@@ -16,21 +16,28 @@ python -m pip install -r requirements.txt
 streamlit run diabetes.py
 ```
 
-By default the app loads `model.pkl` from the repository directory. To use a
-model stored elsewhere, set a portable path explicitly:
+By default the app loads `model.pkl` from the repository directory. To use a model stored elsewhere, set a portable path explicitly:
 
 ```bash
 DIABETES_MODEL_PATH=/absolute/path/to/model.pkl streamlit run diabetes.py
 ```
 
-The model must expose `predict()` and accept these columns in this exact order:
+Relative `DIABETES_MODEL_PATH` values are resolved relative to the repository directory rather than Streamlit's current working directory. The model must expose `predict()` and, when the estimator publishes them, its feature count and names must match these columns in this exact order:
 
 `Pregnancies`, `Glucose`, `BloodPressure`, `SkinThickness`, `Insulin`, `BMI`,
 `DiabetesPedigreeFunction`, `Age`.
 
-Pickle files can execute code while being loaded. Load only a trusted artifact.
-The checked-in artifact was not retrained during this review because the source
-dataset is absent and the sandbox did not have scikit-learn installed.
+The app rejects malformed non-binary predictions and displays a clear error for
+missing, incompatible, or corrupted artifacts. Pickle files can execute code
+while being loaded. Load only a trusted artifact.
+
+**Artifact compatibility warning:** the checked-in `model.pkl` embeds
+scikit-learn `1.0.2` metadata and cannot be loaded by the modern scikit-learn
+version available in this review environment (the tree serialization schema
+changed). It was retained unchanged because the source dataset is absent, so
+it cannot be safely retrained or converted here. Retrain/export the model with
+the versions in `requirements.txt` before using the app; no inference metrics
+are claimed.
 
 ## Notebook and data
 

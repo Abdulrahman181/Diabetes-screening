@@ -15,22 +15,18 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-FEATURES = (
-    "Pregnancies",
-    "Glucose",
-    "BloodPressure",
-    "SkinThickness",
-    "Insulin",
-    "BMI",
-    "DiabetesPedigreeFunction",
-    "Age",
+from diabetes_contracts import (
+    FEATURES,
+    resolve_model_path,
+    validate_input_frame,
+    validate_model_contract,
+    validate_prediction,
 )
 
 
 def model_path() -> Path:
-    """Return the configured model path, resolved relative to this file by default."""
-    configured = os.getenv("DIABETES_MODEL_PATH")
-    return Path(configured).expanduser() if configured else Path(__file__).resolve().with_name("model.pkl")
+    """Return a model path independent of Streamlit's current working directory."""
+    return resolve_model_path(os.getenv("DIABETES_MODEL_PATH"), Path(__file__).resolve().parent)
 
 
 @st.cache_resource(show_spinner=False)
@@ -44,9 +40,7 @@ def load_model(path: str) -> Any:
         )
     with artifact.open("rb") as handle:
         model = pickle.load(handle)
-    if not callable(getattr(model, "predict", None)):
-        raise TypeError("The model artifact does not expose a callable predict method.")
-    return model
+    return validate_model_contract(model)
 
 
 def input_features() -> pd.DataFrame:
@@ -63,7 +57,7 @@ def input_features() -> pd.DataFrame:
         ),
         "Age": st.number_input("Age", min_value=0.0, value=30.0, step=1.0),
     }
-    return pd.DataFrame([[values[name] for name in FEATURES]], columns=FEATURES)
+    return validate_input_frame(pd.DataFrame([[values[name] for name in FEATURES]], columns=FEATURES))
 
 
 def main() -> None:
@@ -74,15 +68,28 @@ def main() -> None:
 
     try:
         model = load_model(str(model_path()))
-    except (FileNotFoundError, OSError, TypeError, pickle.UnpicklingError) as exc:
-        st.error(str(exc))
+    except (
+        AttributeError,
+        EOFError,
+        FileNotFoundError,
+        ImportError,
+        ModuleNotFoundError,
+        OSError,
+        pickle.UnpicklingError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        st.error(
+            f"Unable to load a compatible model from {model_path()}: {exc} "
+            "Use a trusted artifact trained with a compatible scikit-learn version."
+        )
         st.stop()
 
     features = input_features()
     if st.button("Predict", type="primary"):
         try:
-            prediction = int(model.predict(features)[0])
-        except (IndexError, TypeError, ValueError) as exc:
+            prediction = validate_prediction(model.predict(features))
+        except Exception as exc:  # Streamlit boundary: show model errors without crashing the page.
             st.error(f"Prediction failed; verify model compatibility with the {len(FEATURES)} features: {exc}")
             st.stop()
         label = "positive (model predicts diabetes)" if prediction == 1 else "negative (model predicts no diabetes)"
